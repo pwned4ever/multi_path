@@ -59,7 +59,7 @@ uint64_t ipc_space_kernel() {
 }
 
 uint64_t find_port_address(mach_port_name_t port) {
-    
+   
     uint64_t task_port_addr = task_self_addr();
     //uint64_t task_addr = task_self_addr();
     uint64_t task_addr = kread64(task_port_addr + offsetof_ip_kobject);
@@ -69,9 +69,9 @@ uint64_t find_port_address(mach_port_name_t port) {
     
     uint32_t port_index = port >> 8;
     const int sizeof_ipc_entry_t = 0x18;
-    
+
     uint64_t port_addr = kread64(is_table + (port_index * sizeof_ipc_entry_t));
-    
+
     return port_addr;
 }
 
@@ -348,7 +348,6 @@ int cp(const char *from, const char *to) {
     if (fd_to < 0)
         goto out_error;
     
-    //while (nread = read(fd_from, buf, sizeof buf), nread > 0)
     while (nread = read(fd_from, buf, sizeof buf), nread > 0)
     {
         char *out_ptr = buf;
@@ -393,7 +392,6 @@ out_error:
     return -1;
 }
 
-
 uint64_t getVnodeAtPath(const char *path) {
     extern uint64_t kslide;
     
@@ -415,18 +413,11 @@ uint64_t getVnodeAtPath(const char *path) {
     
     uint64_t context = zm_fix_addr(kexecute(ksym_vfs_context_current + kslide, 1, 0, 0, 0, 0, 0, 0)); //grab the vfs_context; thanks iBSparkes aka PsychoTea
     uint64_t vnode = kalloc(sizeof(unsigned int *)); //allocate memory on the kernel and grab the address
-    //typedef struct vnode *vnode_t;
     
-    //errno_t vnode_lookup(const char *path, int flags, vnode_t *vnode, uint64_t context);
-    //flags = VNODE_LOOKUP_NOFOLLOW;// : do not follow symbolic links.
-    //VNODE_LOOKUP_NOCROSSMOUNT:
-    // vnode_put(vnode);
     kMexecute(ksym_vnode_lookup + kslide, path, 0, vnode, context); //execute vnode_lookup()
-    //printf("vnode_lookup! = 0x%llx\n  path = %s\n context = 0x%llx\n" ,vnode, path, context );
-    //int vnode_put(vnode_t vnode);
-    
     //kexecute(ksym_vnode_lookup + kslide, (uint64_t)path, 0, vnode, context, 0, 0, 0); //execute vnode_lookup()
     return (vnode); //grab what vnode_lookup wrote in our vnode pointer
+
     //return kread64(vnode); //grab what vnode_lookup wrote in our vnode pointer
 }
 

@@ -131,8 +131,9 @@ uint64_t find_kernel_base() {
     get_root(getpid()); //setuid(0)
     setcsflags(getpid());
     unsandbox(getpid());
-    platformize(getpid()); //tf_platform
     
+    platformize(getpid()); //tf_platform
+
     if (geteuid() == 0) {
         
         [self log:@"Success! Got root!"];
@@ -151,7 +152,7 @@ uint64_t find_kernel_base() {
         [self log:@"Failed to get root!"];
         return;
     }
-    
+
     //-------------amfid-------------//
     
     //uint64_t selfcred = borrowCredsFromDonor("/usr/bin/sysdiagnose"); //eta son! once I get this working I won't rely on QiLin anymore cus it's closed source
@@ -186,15 +187,15 @@ uint64_t find_kernel_base() {
     //-------------codesign test-------------//
     
     int rv = launch((char*)[testbin UTF8String], NULL, NULL, NULL, NULL, NULL, NULL, NULL);
-    
+
     [self log:(rv) ? @"Failed to patch codesign!" : @"SUCCESS! Patched codesign!"];
     [self log:(rv2) ? @"Failed to inject code to amfid!" : @"Code injection success!"];
     
     //-------------remount-------------//
     
     if (@available(iOS 11.3, *)) {
-        remount1131();
-        [self log:[NSString stringWithFormat:@"Did we mount / as read+write? %s", [[NSFileManager defaultManager] fileExistsAtPath:@"/RWTEST"] ? "yes" : "no"]];
+        //remount1131();
+        //[self log:[NSString stringWithFormat:@"Did we mount / as read+write? %s", [[NSFileManager defaultManager] fileExistsAtPath:@"/RWTEST"] ? "yes" : "no"]];
         [self log:@"Remount eta son?"];
     } else if (@available(iOS 11.0, *)) {
         remount1126();
@@ -220,26 +221,34 @@ uint64_t find_kernel_base() {
     
     if (!rv && !rv2) {
         prepare_payload(); //chmod all binaries
+        if (@available(iOS 11.3, *)) {
+            remount1131();
+            [self log:[NSString stringWithFormat:@"Did we mount / as read+write? %s", [[NSFileManager defaultManager] fileExistsAtPath:@"/RWTEST"] ? "yes" : "no"]];
+            [self log:@"Remount eta son?"];
+        } else if (@available(iOS 11.0, *)) {
+            //remount1126();
+            [self log:[NSString stringWithFormat:@"Did we mount / as read+write? %s", [[NSFileManager defaultManager] fileExistsAtPath:@"/RWTEST"] ? "yes" : "no"]];
+        }
         
         sleep(3);
         
         NSString *dropbear = [NSString stringWithFormat:@"%@/iosbinpack64/usr/local/bin/dropbear", [[NSBundle mainBundle] bundlePath]];
         NSString *bash = [NSString stringWithFormat:@"%@/iosbinpack64/bin/bash", [[NSBundle mainBundle] bundlePath]];
         NSString *profile = [NSString stringWithFormat:@"%@/iosbinpack64/etc/profile", [[NSBundle mainBundle] bundlePath]];
+        NSString *motd = [NSString stringWithFormat:@"%@/iosbinpack64/etc/motd", [[NSBundle mainBundle] bundlePath]];
         NSString *profiledata = [NSString stringWithContentsOfFile:profile encoding:NSASCIIStringEncoding error:nil];
         [[profiledata stringByReplacingOccurrencesOfString:@"REPLACE_ME" withString:iosbinpack] writeToFile:profile atomically:YES encoding:NSASCIIStringEncoding error:nil];
         
         
         mkdir("/var/dropbear", 0777);
         unlink("/var/profile");
+        unlink("/var/motd");
         cp([profile UTF8String], "/var/profile");
+        cp([motd UTF8String], "/var/motd");
         chmod("/var/profile", 0777);
+        chmod("/var/motd", 0777); //this can be read-only but just in case
         
-        
-        //NSString *environment = [NSString stringWithFormat:@"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/bin/X11:/usr/games:%@/usr/local/sbin:%@/usr/local/bin:%@/usr/sbin:%@/usr/bin:%@/sbin:%@/bin", iosbinpack, iosbinpack, iosbinpack, iosbinpack, iosbinpack, iosbinpack];
-        //const char* env[] = {"PS1='\\h:\\w \\u\\$'", (const char*)[environment UTF8String],  NULL}; doesn't work
-        
-        dbret = launchAsPlatform((char*)[dropbear UTF8String], "-R", "--shell", (char*)[bash UTF8String], "-E", "-p", "22", NULL); //since I can't get environment to work properly you have to run /var/profile manually to setup the environment variables
+        dbret = launchAsPlatform((char*)[dropbear UTF8String], "-R", "--shell", (char*)[bash UTF8String], "-E", "-p", "22", NULL); 
         
         //-------------launch daeamons-------------//
         //--you can drop any daemon plist in iosbinpack64/LaunchDaemons and it will be loaded automatically. "REPLACE_BIN" will automatically get replaced by the absolute path of iosbinpack64--//
@@ -277,7 +286,7 @@ uint64_t find_kernel_base() {
         if ([[self getIPAddress] isEqualToString:@"Are you connected to internet?"])
             [self log:@"Connect to Wi-fi in order to use SSH"];
         else
-            [self log:[NSString stringWithFormat:@"SSH should be up and running (Run /var/profile once you connect!)\nconnect by running: \nssh root@%@", [self getIPAddress]]];
+            [self log:[NSString stringWithFormat:@"SSH should be up and running\nconnect by running: \nssh root@%@", [self getIPAddress]]];
     }
     else {
         [self log:@"Failed to initialize SSH."];
@@ -293,7 +302,7 @@ uint64_t find_kernel_base() {
         dispatch_async(dispatch_get_global_queue( DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^(void){
             drop_payload(); //chmod 777 all binaries and spawn a shell
         });
-        
+    
         if ([[self getIPAddress] isEqualToString:@"Are you connected to internet?"])
             [self log:@"Connect to Wi-fi in order to use the shell"];
         else

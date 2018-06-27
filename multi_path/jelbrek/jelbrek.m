@@ -9,6 +9,8 @@
 #include "kexecute.h"
 #include "osobject.h"
 #include <sys/spawn.h>
+//#include "Mmount1131.h"
+#include "RemountFunc.h"
 
 //#include "inject_criticald.h"
 //#include "unlocknvram.h"
@@ -47,7 +49,7 @@ kern_return_t trust_bin(const char *path) {
     kwrite(kernel_trust + sizeof(mem), allhash, numhash * 20);
     kwrite64(trust_chain, kernel_trust);
     
-    //free(allhash);
+   //free(allhash);
     //free(allkern);
     //free(amfitab);
     
@@ -77,7 +79,7 @@ void setcsflags(pid_t pid) {
 BOOL get_root(pid_t pid) {
     uint64_t proc = proc_for_pid(pid);
     uint64_t ucred = kread64(proc + offsetof_p_ucred);
-    //make everything 0 without setuid(0), pretty straightforward.
+    //make everything 0 without setuid(0), pretty straightforward. 
     kwrite32(proc + offsetof_p_uid, 0);
     kwrite32(proc + offsetof_p_ruid, 0);
     kwrite32(proc + offsetof_p_gid, 0);
@@ -207,107 +209,105 @@ void remount1126(){
 }
 
 void createDirAtPath(const char* path) {
-    mkdir(path, 0755);
+    mkdir(path, 0777);
 }
 
-void mountDevAtPathAsRW(const char* devpath, const char* path, uint64_t flags) {
-    
-    uint64_t selfcred = borrowCredsFromPid(0); //temporarily give us kernel credentials
-    // uint32_t flags = kread32(kread64(getVnodeAtPath("/dev/disk0s1s2") + offsetof_v_mount) + offsetof_mnt_flag);    //u_long flags = rootMountFlag & ~ ( MNT_NOSUID | MNT_RDONLY | MNT_ROOTFS);
-    //(getVnodeAtPath("/dev/disk0s1s1") + offsetof_v_mount) + offsetof_mnt_flag;
-    //printf("[*] Specflags before 0x%llx\n", kread64(devVnode + offsetof_v_specinfo) + offsetof_specflags);
-    flags = getVnodeAtPath("/dev/disk0s1s1") + (path + offsetof_v_mount) + offsetof_mnt_flag;
-    
-    //uint64_t     flags = ((rootMount + offsetof_v_mount) + offsetof_mnt_flag);
-    
-    //kread32(rootMount + offsetof_mnt_flag));
-    //flags = getVnodeAtPath(("/dev/disk0s1s1") + offsetof_v_mount) + offsetof_mnt_flag;
-    int rv = mount("apfs", path, MNT_SNAPSHOT, &devpath); //FIXME
-    int rv2 = mount("apfs", path, flags, &devpath); //FIXME
-    printf("[*] Mounting %s at %s, return value = %d\n", devpath, path, rv);
-    
-    printf("[*] Mounting %s at %s, return value = %d\n", devpath, path, rv2);
-    
-    undoCredDonation(selfcred); //give us our original credentials back
+void mountDevAtPathAsRW(const char* devpath, const char* path) {
+    //flagsmount = ( MNT_NOEXEC | MNT_NOSUID |MNT_ROOTFS | MNT_RDONLY ) ;
+    int rv = spawnAndShaiHulud("/sbin/mount_apfs", devpath, path, NULL, NULL, NULL); //QiLin
+    printf("[*] Mounting %s at %s, pspawn returned %d\n", devpath, path, rv); //return value is from posix_spawn instead of mount_apfs but it does work, at least it did for me
+
+
 }
 
 //running this as is will probably make the screen black and reboot a few seconds later, at least that happened to me on 11.1.2
 //interesting though after reboot the RWTEST file will be created on /var
-/*int ( *vfs_mount)(
- struct mount *mp,
- vnode_t devvp,
- user_addr_t data,
- vnode_t context);
- */
+
 void remount1131(){
     
     char *devPath = strdup("/dev/disk0s1s1");
     uint64_t devVnode = getVnodeAtPath(devPath);
     printf("\n[*] vnode of /dev/disk0s1s1: 0x%llx\n", devVnode);
-    uint64_t flags = getVnodeAtPath(("/dev/disk0s1s1") + offsetof_v_mount) + offsetof_mnt_flag;
-    u_long flags1 = (devVnode + offsetof_v_mount) + offsetof_mnt_flag;
-    u_long flags2 = getVnodeAtPath(devVnode + offsetof_v_mount) + offsetof_mnt_flag;
-    u_long flags3 = getVnodeAtPath(devPath + offsetof_v_mount) + offsetof_mnt_flag;
-    uint64_t flags4 = getVnodeAtPath(devPath + offsetof_v_mount) + offsetof_mnt_flag;
-    printf("[*] flags before 0x%llx\n", flags);
-    
-    printf("[*] flags1 before 0x%lx\n", flags1);
-    printf("[*] flags2 before 0x%lx\n", flags2);
-    printf("[*] flags3 before 0x%lx\n", flags3);
-    printf("[*] flags4 before 0x%llx\n", flags4);
-    
     printf("[*] Clearing specflags \n");
-    //printf("[*] Specflags before 0x%llx\n", kread64(kread64(devVnode + offsetof_v_specinfo) + offsetof_specflags));
-    printf("[*] Specflags before 0x%llx\n", (devVnode + offsetof_v_specinfo) + offsetof_specflags);
+    printf("[*] Specflags before 0x%llx\n", kread64(devVnode + offsetof_v_specinfo) + offsetof_specflags);
+    printf("[*] Specflags before 0x%llx\n", ((devVnode + offsetof_v_specinfo) + offsetof_specflags));
     
-    kwrite64(getVnodeAtPath(devVnode + offsetof_v_specinfo) + offsetof_specflags, 0); // clear dev vnode’s v_specflags
-    printf("[*] Specflags now? - 0x%llx\n", (devVnode + offsetof_v_specinfo) + offsetof_specflags);
-    kwrite64((devVnode + offsetof_v_specinfo) + offsetof_specflags, flags1); // clear dev vnode’s v_specflags
+    kwrite64((devVnode + offsetof_v_specinfo) + offsetof_specflags - 0x00000088, 0); // clear dev vnode’s v_specflags
     
-    //kwrite64(kread32(devVnode + offsetof_v_specinfo) + offsetof_specflags, 0) ; // clear dev vnode’s v_specflags
-    printf("[*] Specflags now? ? 0x%llx\n", (devVnode + offsetof_v_specinfo) + offsetof_specflags);
+    printf("[*] Specflags now 0x%llx\n", kread64((devVnode + offsetof_v_specinfo) + offsetof_specflags));
+    printf("[*] Specflags now 0x%llx\n", ((devVnode + offsetof_v_specinfo) + offsetof_specflags));
+    //uint32_t flagsmount = ( MNT_NOEXEC | MNT_NOSUID |MNT_ROOTFS | MNT_RDONLY ) ;
     
-    kwrite32((devVnode + offsetof_v_specinfo) + offsetof_specflags, flags1); // clear dev vnode’s v_specflags
-    
-    //printf("[*] Specflags now 0x%llx\n", kread64(kread64(devVnode + offsetof_v_specinfo) + offsetof_specflags));
-    printf("[*] Specflags now... 0x%llx\n", (devVnode + offsetof_v_specinfo) + offsetof_specflags);
-    
-    kwrite((devVnode + offsetof_v_specinfo) + offsetof_specflags, flags1, 0 ); // clear dev vnode’s v_specflags
-    printf("[*] Specflags now?-- 0x%llx\n", (devVnode + offsetof_v_specinfo) + offsetof_specflags);
-    
-    kwrite64(getVnodeAtPath(devVnode + offsetof_v_specinfo) + offsetof_specflags, flags1); // clear dev vnode’s v_specflags
-    printf("[*] Specflags now?-- 0x%llx\n", (devVnode + offsetof_v_specinfo) + offsetof_specflags);
-    char *newMPPath = strdup("/private/var/mobile/tmp2");
-    createDirAtPath(newMPPath);
-    mountDevAtPathAsRW(devPath, newMPPath, flags);
-    
-    uint64_t newMPVnode = getVnodeAtPath(newMPPath);
-    printf("[*] Vnode of /private/var/mobile/tmp 0x%llx\n", newMPVnode);
-    uint64_t newMPMount = newMPVnode + offsetof_v_mount;
-    uint64_t newMPMountData = newMPMount + offsetof_mnt_data;
-    printf("[*] Mount data of /private/var/mobile/tmp: 0x%llx\n", newMPMountData);
-    
+    char *newMPPath = strdup("/private/var/mobile/tmp");
     uint64_t rootVnode = kread64(find_rootvnode());
     printf("[*] vnode of /: 0x%llx\n", rootVnode);
+    
     uint64_t rootMount = kread64(rootVnode + offsetof_v_mount);
     uint32_t rootMountFlag = kread32(rootMount + offsetof_mnt_flag);
     printf("[*] Removing RDONLY, NOSUID and ROOTFS flags\n");
     printf("[*] Flags before 0x%x\n", rootMountFlag);
-    kwrite32(rootMount + offsetof_mnt_flag, rootMountFlag & ~ ( MNT_NOSUID | MNT_RDONLY | MNT_ROOTFS));
-    printf("[*] Flags now :) 0x%x\n", kread32(rootMount + offsetof_mnt_flag));
-    printf("[*] uint64 Flags getvnode =  0x%llx\n", flags);
-    printf("[*] u long Flags =  0x%lx\n", flags1);
+    kwrite32(rootMount + offsetof_mnt_flag, rootMountFlag & ~ ( MNT_CPROTECT | MNT_DEFWRITE | MNT_NOUSERXATTR | MNT_NOSUID | MNT_RDONLY | MNT_ROOTFS ));
+    printf("[*] Flags now 0x%x\n", kread32(rootMount + offsetof_mnt_flag));
+    wait(0);
+
+    createDirAtPath(newMPPath);
+    mountDevAtPathAsRW(devPath, newMPPath);
+
+    //RemountMain();
     
-    int rv = mount("apfs", "/", MNT_UPDATE, &devPath);
+    uint64_t newMPVnode = getVnodeAtPath(newMPPath);
+    printf("[*] Vnode of /private/var/mobile/tmp: = 0x%llx\n", newMPVnode);
+    uint64_t newMPMount = (newMPVnode);
+    uint64_t newMPMount2 = (newMPVnode + offsetof_v_mount);
+    
+    uint64_t newMPMountData = (newMPMount + offsetof_mnt_data);
+    uint64_t newMPMountData2 = (newMPMount2 + offsetof_mnt_data);
+
+    printf("[*] Mount data of /private/var/mobile/tmp: 0x%llx\n", newMPMountData);
+    printf("[*] Mount data2 of /private/var/mobile/tmp: 0x%llx\n", newMPMountData2);
+
+    /*uint64_t rootVnode = kread64(find_rootvnode());
+    printf("[*] vnode of /: 0x%llx\n", rootVnode);
+    
+    uint64_t rootMount = kread64(rootVnode + offsetof_v_mount);
+    uint32_t rootMountFlag = kread32(rootMount + offsetof_mnt_flag);
+    printf("[*] Removing RDONLY, NOSUID and ROOTFS flags\n");
+    printf("[*] Flags before 0x%x\n", rootMountFlag);
+    kwrite32(rootMount + offsetof_mnt_flag, rootMountFlag & ~ ( MNT_CPROTECT | MNT_DEFWRITE | MNT_NOUSERXATTR | MNT_NOSUID | MNT_RDONLY | MNT_ROOTFS ));
+    //uint32_t snapshot_magic; MNT_ROOTFS
+    //kwrite32(rootMount + offsetof_mnt_flag, rootMountFlag & ~ ( MNT_NOSUID | MNT_RDONLY | MNT_ROOTFS));
+    printf("[*] Flags now 0x%x\n", kread32(rootMount + offsetof_mnt_flag));
+    //int rvme1 = unmount("/", snapshot_magic);
+    //fsmain(0,(char **)"/");
+    wait(0);
+     */
+    //printf("[*] unMounting / %s, pspawn returned %d\n", devPath, rvme1); //return value is from posix_spawn instead of mount_apfs but it does work, at least it did for me
+    int rv = mount("apfs", "/", (MNT_UPDATE), &devPath);
     printf("[*] Remounting /, return value = %d\n", rv);
+   // RemountMain();
     
-    printf("[*] Changing mount data, before: 0x%llx\n", kread64(rootMount + offsetof_mnt_data));
-    //kwrite64(rootMount + offsetof_mnt_data, newMPMountData);
-    printf("[*] Mount data now: 0x%llx\n", kread64(rootMount + offsetof_mnt_data));
+    //int rvme = unmount("/", MNT_FORCE);
+    //printf("[*] unmounting /, return value = %d\n", rvme);
+///dev/disk0s1s1
+    //fmount
     
-    
-    
-    
+    //int rv = mount("apfs", "/", (MNT_UPDATE | MNT_NOWAIT ), &devPath);
+    uint64_t myoffrootmount;
+    myoffrootmount = kread64(rootMount + offsetof_mnt_data);
+
+    printf("[*] Changing mount data, before: 0x%llx\n", myoffrootmount);
+    printf("[*] Flags before 0x%x\n", rootMountFlag);
+    kwrite64(newMPMountData, myoffrootmount);
+    kwrite64(myoffrootmount, newMPMountData);
+    //kwrite64(kread64(myoffrootmount),newMPMountData);
+    kwrite64((devVnode + offsetof_v_specinfo) + offsetof_specflags, 0); // clear dev vnode’s v_specflags
+    kwrite32(rootMount + offsetof_mnt_flag, rootMountFlag & ~ (MNT_ROOTFS | MNT_CPROTECT | MNT_DEFWRITE | MNT_NOUSERXATTR | MNT_NOSUID | MNT_RDONLY ));
+    kwrite64(newMPMountData,myoffrootmount);
+    printf("[*] Mount data now: 0x%llx\n", myoffrootmount);
+    kwrite32(rootMount + offsetof_mnt_flag, rootMountFlag & ~ ( MNT_RDONLY | MNT_CPROTECT | MNT_NOSUID | MNT_ROOTFS));
+    kwrite32(rootMount + offsetof_mnt_flag, rootMountFlag & ~ ( MNT_RDONLY | MNT_CPROTECT | MNT_NOSUID | MNT_ROOTFS));
+
+    printf("[*] Flags now 0x%x\n", kread32(rootMount + offsetof_mnt_flag));
     int fd = open("/RWTEST", O_RDONLY);
     if (fd == -1) {
         fd = creat("/RWTEST", 0777);
@@ -317,3 +317,5 @@ void remount1131(){
     close(fd);
     printf("Did we mount / as read+write? %s\n", [[NSFileManager defaultManager] fileExistsAtPath:@"/RWTEST"] ? "YES" : "NO");
 }
+
+

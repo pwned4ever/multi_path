@@ -34,7 +34,8 @@ void setDebugReporter (status_func *Func);
 	if (rc) { fprintf(stderr,"Qilin Initialization failed!\n"); return rc;}
 
 	int spawnAndShaiHulud (char *AmfidebPath, char *Arg1, char *Arg2, char *Arg3 , char *Arg4, char *Arg5);
-	rc = spawnAndShaiHulud (argv[1], argv[2], NULL, NULL, NULL,NULL);
+
+    rc = spawnAndShaiHulud (argv[1], argv[2], NULL, NULL, NULL,NULL);
 
 
 }
